@@ -1,7 +1,7 @@
-script_name("Ghetto Discord Assistant")
-script_version("10.2")
+script_name("Ghetto Control Panel")
+script_version("11.0")
 script_author("Casual Alvarez")
-script_description("Капт хелпер")
+script_description("Ghetto Control Panel: капты, онлайн банд, recovery, Discord и вспомогательные инструменты")
 
 require "lib.moonloader"
 require "lib.sampfuncs"
@@ -93,7 +93,7 @@ PATHS.DISCORD_DEBUG_LOG          = PATHS.BASE_DIR .. "discord_debug.log"
 PATHS.CAPTURE_IGNORE_NICKS_FILE  = PATHS.BASE_DIR .. "pe4enitos.txt"
 PATHS.UPDATER_TEMP_FILE          = PATHS.BASE_DIR .. "CaptureDiscordAssistant.update.tmp.lua"
 
-COLORS.SCRIPT_TAG = "[Ghetto Discord Assistant]"
+COLORS.SCRIPT_TAG = "[Ghetto Control Panel]"
 COLORS.CHAT_COLOR = 0xFFFFFFFF
 COLORS.WHITE      = "{FFFFFF}"
 COLORS.ACCENT     = "{6FA8FF}"
@@ -107,7 +107,8 @@ COLORS.INFO       = COLORS.ACCENT
 COLORS.BLUE       = COLORS.ACCENT
 
 CONST.LINE_TEXT                = "========================================"
-CONST.SCRIPT_VERSION           = "10.2"
+CONST.BRAND_NAME               = "Ghetto Control Panel"
+CONST.SCRIPT_VERSION           = "10.1"
 CONST.UPDATER_REPO_URL         = "https://github.com/ameskrillex/ghetto-helper-arp"
 CONST.UPDATER_SCRIPT_URL       = "https://raw.githubusercontent.com/ameskrillex/ghetto-helper-arp/main/CaptureDiscordAssistant.lua"
 CONST.UPDATER_VERSION_URL      = "https://raw.githubusercontent.com/ameskrillex/ghetto-helper-arp/main/version.json"
@@ -3109,7 +3110,7 @@ local function buildDiscordEmbedPayload(title, description, color, footerText)
         jsonEscape(title),
         jsonEscape(finalDescription),
         tonumber(color) or 16729344,
-        jsonEscape(footerText or "Ghetto Discord Assistant")
+        jsonEscape(footerText or CONST.BRAND_NAME)
     )
 end
 
@@ -4882,7 +4883,7 @@ end
 
 local function chatStyled(kind, text)
     local prefixColor = COLORS.ACCENT
-    local label = "Ghetto Discord Assistant"
+    local label = CONST.BRAND_NAME
     if kind == "error" then
         prefixColor = COLORS.ERROR
         label = "Ошибка"
@@ -4997,6 +4998,10 @@ drawStartButton = function()
 end
 
 drawAuthorFooter = function(text)
+    text = trim(tostring(text or ""))
+    if text == "" then
+        return
+    end
     imgui.Spacing()
     imgui.BeginChild("##author_footer_lux", imgui.ImVec2(0, 34), false)
     drawCenteredText(text, imgui.ImVec4(0.58, 0.58, 0.58, 1.00))
@@ -5051,7 +5056,7 @@ end
 
 drawWelcomePage = function()
     imgui.BeginChild("##welcome_shell_lux", imgui.ImVec2(0, 0), true)
-    drawCenteredText("Ghetto Discord Assistant", imgui.ImVec4(0.96, 0.96, 0.94, 1.00))
+    drawCenteredText(CONST.BRAND_NAME, imgui.ImVec4(0.96, 0.96, 0.94, 1.00))
     drawCenteredText("Панель захвата, логов Discord и восстановления", imgui.ImVec4(0.66, 0.67, 0.69, 1.00))
     imgui.Spacing()
 
@@ -5098,10 +5103,10 @@ drawWelcomePage = function()
 
     imgui.Spacing()
     imgui.BeginChild("##welcome_version_lux", imgui.ImVec2(0, 42), true)
-    drawCenteredText("Версия 9.5", imgui.ImVec4(0.84, 0.84, 0.82, 1.00))
+    drawCenteredText("Версия " .. tostring(CONST.SCRIPT_VERSION or "?"), imgui.ImVec4(0.84, 0.84, 0.82, 1.00))
     imgui.EndChild()
 
-    drawAuthorFooter("by Casual Alvarez")
+    drawAuthorFooter("")
     imgui.EndChild()
 end
 
@@ -5218,14 +5223,14 @@ imgui.OnDrawFrame = function()
         pcall(function()
             imgui.SetNextWindowSizeConstraints(imgui.ImVec2(520, 520), imgui.ImVec2(4096, 4096))
         end)
-        imgui.Begin("Ghetto Discord Assistant", UI.window_state)
+        imgui.Begin(CONST.BRAND_NAME, UI.window_state)
 
         if UI.active_tab == 0 then
             drawWelcomePage()
         else
             imgui.BeginChild("##hero_main_lux_latest", imgui.ImVec2(0, 84), true)
-            imgui.TextColored(imgui.ImVec4(0.96, 0.96, 0.94, 1.00), "Ghetto Discord Assistant")
-            imgui.TextColored(imgui.ImVec4(0.67, 0.68, 0.70, 1.00), "Элегантная панель управления логами захвата, наказаниями и recovery")
+            imgui.TextColored(imgui.ImVec4(0.96, 0.96, 0.94, 1.00), CONST.BRAND_NAME)
+            imgui.TextColored(imgui.ImVec4(0.67, 0.68, 0.70, 1.00), "Логи капта, онлайн банд, recovery и вспомогательные инструменты")
             imgui.Spacing()
             imgui.TextColored(
                 STATE.capture.active and imgui.ImVec4(0.96, 0.84, 0.56, 1.00) or imgui.ImVec4(0.66, 0.67, 0.70, 1.00),
@@ -5290,7 +5295,7 @@ imgui.OnDrawFrame = function()
 
             imgui.Spacing()
             drawBottomStatus()
-            drawAuthorFooter("by Casual Alvarez")
+            drawAuthorFooter("")
         end
 
         if not UI.window_state.v and not STATE.capture.active then
@@ -5323,13 +5328,13 @@ local function registerCommands()
         UI.active_tab = 0
         UI.window_state.v = true
         imgui.Process = true
-        sampAddChatMessage(utf8_to_cp1251("{6FA8FF}[Ghetto Discord Assistant]{FFFFFF} Открыта стартовая страница."), -1)
+        sampAddChatMessage(utf8_to_cp1251("{6FA8FF}[Ghetto Control Panel]{FFFFFF} Открыта стартовая страница."), -1)
     end)
 end
 
 local function printStartBanner()
     chat(COLORS.LINE .. CONST.LINE_TEXT)
-    chat(COLORS.GOLD .. " Ghetto Discord Assistant запущен")
+    chat(COLORS.GOLD .. " " .. CONST.BRAND_NAME .. " запущен")
     chat(COLORS.WHITE .. " Автор: " .. COLORS.RED .. "Casual Alvarez")
     chat(COLORS.WHITE .. " Команды: "
         .. COLORS.ACCENT .. "/discordghetto "
