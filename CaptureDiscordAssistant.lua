@@ -108,7 +108,7 @@ COLORS.BLUE       = COLORS.ACCENT
 
 CONST.LINE_TEXT                = "========================================"
 CONST.BRAND_NAME               = "Ghetto Control Panel"
-CONST.SCRIPT_VERSION           = "10.1"
+CONST.SCRIPT_VERSION           = "11.0"
 CONST.UPDATER_REPO_URL         = "https://github.com/ameskrillex/ghetto-helper-arp"
 CONST.UPDATER_SCRIPT_URL       = "https://raw.githubusercontent.com/ameskrillex/ghetto-helper-arp/main/CaptureDiscordAssistant.lua"
 CONST.UPDATER_VERSION_URL      = "https://raw.githubusercontent.com/ameskrillex/ghetto-helper-arp/main/version.json"
