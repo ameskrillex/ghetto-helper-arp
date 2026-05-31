@@ -130,7 +130,7 @@ CONST.ONLINE_MONOCOLOR_GUARD_MIN_PLAYERS = 5
 CONST.ONLINE_SEND_GUARD_SECONDS = 4.0
 CONST.INVALID_PLAYER_ID = 65535
 CONST.INVALID_VEHICLE_ID = 65535
-CONST.LONG_RANGE_LABEL_DISTANCE = 1000.0
+CONST.LONG_RANGE_LABEL_DISTANCE = 3000.0
 CONST.LONG_RANGE_LABEL_FORCE_WALLHACK = true
 CONST.LONG_RANGE_LABEL_ONLY_ATTACHED = true
 CONST.CUSTOM_NAMETAGS_MAX_DISTANCE = 1488.0
@@ -5110,6 +5110,47 @@ drawWelcomePage = function()
     imgui.EndChild()
 end
 
+drawWelcomePage = function()
+    imgui.BeginChild("##welcome_shell_lux_compact", imgui.ImVec2(0, 0), true)
+    drawCenteredText(CONST.BRAND_NAME, imgui.ImVec4(0.96, 0.96, 0.94, 1.00))
+    drawCenteredText("Панель захвата, логов Discord и восстановления", imgui.ImVec4(0.66, 0.67, 0.69, 1.00))
+    imgui.Spacing()
+
+    imgui.BeginChild("##welcome_hero_lux_compact", imgui.ImVec2(0, 82), true)
+    drawCenteredText("Собирает события капта, фиксирует наказания, считает онлайн банд и помогает завершить сессию после сбоя.", imgui.ImVec4(0.86, 0.86, 0.84, 1.00))
+    imgui.Spacing()
+    drawCenteredText("Один интерфейс для всего цикла работы во время захвата.", imgui.ImVec4(0.96, 0.84, 0.56, 1.00))
+    imgui.EndChild()
+
+    imgui.Spacing()
+
+    imgui.BeginChild("##welcome_controls_lux_compact", imgui.ImVec2(0, 136), true)
+    imgui.TextColored(imgui.ImVec4(0.96, 0.84, 0.56, 1.00), "Быстрые настройки")
+    imgui.Separator()
+    drawToggleRow("Локальные уведомления в чате", BOOLS.localFeedBool, "welcome_feed_lux_compact")
+    drawToggleRow("Автоотправка онлайна при старте", BOOLS.autoOnlineOnCaptureStartBool, "welcome_online_lux_compact")
+    drawToggleRow("Сохранять общую статистику фрагов", BOOLS.saveStatsBool, "welcome_stats_lux_compact")
+    imgui.EndChild()
+
+    imgui.Spacing()
+    local avail = imgui.GetContentRegionAvail().x
+    local x = (avail - 280) * 0.5
+    if x > 0 then
+        imgui.SetCursorPosX(imgui.GetCursorPosX() + x)
+    end
+    if drawStartButton() then
+        saveConfig()
+        UI.active_tab = 1
+    end
+
+    imgui.Spacing()
+    imgui.BeginChild("##welcome_version_lux_compact", imgui.ImVec2(0, 42), true)
+    drawCenteredText("Версия " .. tostring(CONST.SCRIPT_VERSION or "?"), imgui.ImVec4(0.84, 0.84, 0.82, 1.00))
+    imgui.EndChild()
+
+    imgui.EndChild()
+end
+
 drawBottomStatus = function()
     imgui.BeginChild("##status_footer_lux", imgui.ImVec2(0, 42), true)
     drawCenteredText(
@@ -5219,18 +5260,19 @@ imgui.OnDrawFrame = function()
     if not imgui.Process then return end
 
     if UI.window_state.v then
-        imgui.SetNextWindowSize(imgui.ImVec2(980, 760), imgui.Cond.FirstUseEver)
+        imgui.SetNextWindowSize(imgui.ImVec2(820, 560), imgui.Cond.FirstUseEver)
         pcall(function()
-            imgui.SetNextWindowSizeConstraints(imgui.ImVec2(520, 520), imgui.ImVec2(4096, 4096))
+            imgui.SetNextWindowSizeConstraints(imgui.ImVec2(460, 420), imgui.ImVec2(4096, 4096))
         end)
         imgui.Begin(CONST.BRAND_NAME, UI.window_state)
 
         if UI.active_tab == 0 then
             drawWelcomePage()
         else
-            imgui.BeginChild("##hero_main_lux_latest", imgui.ImVec2(0, 84), true)
+            imgui.BeginChild("##hero_main_lux_latest", imgui.ImVec2(0, 132), true)
             imgui.TextColored(imgui.ImVec4(0.96, 0.96, 0.94, 1.00), CONST.BRAND_NAME)
-            imgui.TextColored(imgui.ImVec4(0.67, 0.68, 0.70, 1.00), "Логи капта, онлайн банд, recovery и вспомогательные инструменты")
+            imgui.TextWrapped("В этом скрипте я реализовал все, что хотел бы иметь в своем ассортименте скриптов, очень жаль, что слишком поздно. Возможно некоторые вещи не совсем удобные, но работать можно. Как только найду время - обязательно доделаю.")
+            imgui.TextColored(imgui.ImVec4(0.67, 0.68, 0.70, 1.00), "by Casual Alvarez")
             imgui.Spacing()
             imgui.TextColored(
                 STATE.capture.active and imgui.ImVec4(0.96, 0.84, 0.56, 1.00) or imgui.ImVec4(0.66, 0.67, 0.70, 1.00),
