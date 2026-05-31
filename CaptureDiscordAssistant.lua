@@ -1,5 +1,5 @@
 script_name("Ghetto Control Panel")
-script_version("11.0")
+script_version("11.1")
 script_author("Casual Alvarez")
 script_description("Ghetto Control Panel: капты, онлайн банд, recovery, Discord и вспомогательные инструменты")
 
@@ -108,7 +108,7 @@ COLORS.BLUE       = COLORS.ACCENT
 
 CONST.LINE_TEXT                = "========================================"
 CONST.BRAND_NAME               = "Ghetto Control Panel"
-CONST.SCRIPT_VERSION           = "11.0"
+CONST.SCRIPT_VERSION           = "11.1"
 CONST.UPDATER_REPO_URL         = "https://github.com/ameskrillex/ghetto-helper-arp"
 CONST.UPDATER_SCRIPT_URL       = "https://raw.githubusercontent.com/ameskrillex/ghetto-helper-arp/main/CaptureDiscordAssistant.lua"
 CONST.UPDATER_VERSION_URL      = "https://raw.githubusercontent.com/ameskrillex/ghetto-helper-arp/main/version.json"
