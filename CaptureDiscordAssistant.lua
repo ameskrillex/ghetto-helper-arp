@@ -1,5 +1,5 @@
 script_name("Ghetto Discord Assistant")
-script_version("10.1")
+script_version("10.2")
 script_author("Casual Alvarez")
 script_description("Капт хелпер")
 
@@ -107,7 +107,7 @@ COLORS.INFO       = COLORS.ACCENT
 COLORS.BLUE       = COLORS.ACCENT
 
 CONST.LINE_TEXT                = "========================================"
-CONST.SCRIPT_VERSION           = "10.1"
+CONST.SCRIPT_VERSION           = "10.2"
 CONST.UPDATER_REPO_URL         = "https://github.com/ameskrillex/ghetto-helper-arp"
 CONST.UPDATER_SCRIPT_URL       = "https://raw.githubusercontent.com/ameskrillex/ghetto-helper-arp/main/CaptureDiscordAssistant.lua"
 CONST.UPDATER_VERSION_URL      = "https://raw.githubusercontent.com/ameskrillex/ghetto-helper-arp/main/version.json"
