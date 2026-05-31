@@ -1,7 +1,7 @@
-﻿script_name("Ghetto Discord Assistant")
-script_version("10.0")
+script_name("Ghetto Discord Assistant")
+script_version("10.1")
 script_author("Casual Alvarez")
-script_description("Помощь в слежке за каптами ADVANCE RP BLUE")
+script_description("Капт хелпер")
 
 require "lib.moonloader"
 require "lib.sampfuncs"
@@ -91,6 +91,7 @@ PATHS.LAST_CAPTURE_STATE_FILE    = PATHS.BASE_DIR .. "last_capture_state.txt"
 PATHS.PENDING_CAPTURE_STATE_FILE = PATHS.BASE_DIR .. "pending_capture_state.txt"
 PATHS.DISCORD_DEBUG_LOG          = PATHS.BASE_DIR .. "discord_debug.log"
 PATHS.CAPTURE_IGNORE_NICKS_FILE  = PATHS.BASE_DIR .. "pe4enitos.txt"
+PATHS.UPDATER_TEMP_FILE          = PATHS.BASE_DIR .. "CaptureDiscordAssistant.update.tmp.lua"
 
 COLORS.SCRIPT_TAG = "[Ghetto Discord Assistant]"
 COLORS.CHAT_COLOR = 0xFFFFFFFF
@@ -106,6 +107,11 @@ COLORS.INFO       = COLORS.ACCENT
 COLORS.BLUE       = COLORS.ACCENT
 
 CONST.LINE_TEXT                = "========================================"
+CONST.SCRIPT_VERSION           = "10.1"
+CONST.UPDATER_REPO_URL         = "https://github.com/ameskrillex/ghetto-helper-arp"
+CONST.UPDATER_SCRIPT_URL       = "https://raw.githubusercontent.com/ameskrillex/ghetto-helper-arp/main/CaptureDiscordAssistant.lua"
+CONST.UPDATER_VERSION_URL      = "https://raw.githubusercontent.com/ameskrillex/ghetto-helper-arp/main/version.json"
+CONST.UPDATER_COMMAND          = "ghettoupdate"
 CONST.SESSION_SEPARATOR        = "================================="
 CONST.MAX_RECOVERY_AGE_SECONDS = 4 * 60 * 60
 CONST.STREAK_WINDOW_SECONDS    = 7 * 60
@@ -275,6 +281,16 @@ DATA.discordSequenceWorkers = 0
 DATA.forceUnloadAfterDiscord = false
 DATA.forceUnloadScheduled = false
 DATA.pendingSelfReload = false
+DATA.updater = {
+    checking = false,
+    downloading = false,
+    updateAvailable = false,
+    latestVersion = "",
+    latestScriptUrl = "",
+    changelog = "",
+    lastError = "",
+    lastCheckedAt = 0
+}
 DATA.customNametags = {
     active = false,
     font = nil,
@@ -1427,6 +1443,408 @@ local function saveCaptureDataToFile(path, data)
 
     f:close()
     return true
+end
+
+function APP.stripUtf8Bom(text)
+    text = tostring(text or "")
+    if text:sub(1, 3) == "\239\187\191" then
+        return text:sub(4)
+    end
+    return text
+end
+
+function APP.getSelfScriptPath()
+    local ok, script = pcall(function()
+        return thisScript()
+    end)
+    if ok and script and script.path and tostring(script.path) ~= "" then
+        return tostring(script.path)
+    end
+    return getWorkingDirectory() .. "\\CaptureDiscordAssistant.lua"
+end
+
+function APP.readAllText(path, binaryMode)
+    local mode = binaryMode and "rb" or "r"
+    local file = io.open(path, mode)
+    if not file then
+        return nil
+    end
+
+    local text = file:read("*a")
+    file:close()
+    return text
+end
+
+function APP.writeAllText(path, text, binaryMode)
+    local mode = binaryMode and "wb" or "w"
+    local file = io.open(path, mode)
+    if not file then
+        return false
+    end
+
+    file:write(text or "")
+    file:close()
+    return true
+end
+
+function APP.jsonExtractString(text, key)
+    text = APP.stripUtf8Bom(tostring(text or ""))
+    key = tostring(key or "")
+    if key == "" then
+        return nil
+    end
+
+    local pattern = "\"" .. key:gsub("([^%w_])", "%%%1") .. "\"%s*:%s*\"(.-)\""
+    local value = text:match(pattern)
+    if not value then
+        return nil
+    end
+
+    value = value:gsub("\\/", "/")
+    value = value:gsub("\\n", "\n")
+    value = value:gsub("\\r", "\r")
+    value = value:gsub("\\t", "\t")
+    value = value:gsub("\\\"", "\"")
+    value = value:gsub("\\\\", "\\")
+    return value
+end
+
+function APP.parseUpdaterVersionJson(text)
+    text = APP.stripUtf8Bom(tostring(text or ""))
+    if text == "" then
+        return nil, "version.json пустой"
+    end
+
+    local version = APP.jsonExtractString(text, "version")
+    local scriptUrl = APP.jsonExtractString(text, "script_url")
+    local versionUrl = APP.jsonExtractString(text, "version_url")
+    local repoUrl = APP.jsonExtractString(text, "repo_url")
+    local changelog = APP.jsonExtractString(text, "changelog") or ""
+
+    if not version or version == "" then
+        return nil, "в version.json нет поля version"
+    end
+    if not scriptUrl or scriptUrl == "" then
+        return nil, "в version.json нет поля script_url"
+    end
+
+    return {
+        version = trim(version),
+        script_url = trim(scriptUrl),
+        version_url = trim(versionUrl or ""),
+        repo_url = trim(repoUrl or ""),
+        changelog = trim(changelog)
+    }, nil
+end
+
+function APP.splitVersionParts(version)
+    local parts = {}
+    version = tostring(version or "")
+    for piece in version:gmatch("[^%.%-_]+") do
+        table.insert(parts, tonumber(piece) or 0)
+    end
+    if #parts == 0 then
+        table.insert(parts, 0)
+    end
+    return parts
+end
+
+function APP.compareVersions(left, right)
+    local a = APP.splitVersionParts(left)
+    local b = APP.splitVersionParts(right)
+    local maxCount = math.max(#a, #b)
+
+    for i = 1, maxCount do
+        local av = tonumber(a[i]) or 0
+        local bv = tonumber(b[i]) or 0
+        if av > bv then
+            return 1
+        elseif av < bv then
+            return -1
+        end
+    end
+
+    return 0
+end
+
+function APP.parseVersionFromLuaScript(text)
+    text = APP.stripUtf8Bom(tostring(text or ""))
+    local version = text:match("script_version%s*%(%s*\"([^\"]+)\"%s*%)")
+    if not version then
+        version = text:match("script_version%s*%(%s*'([^']+)'%s*%)")
+    end
+    return trim(version or "")
+end
+
+function APP.isValidUpdaterScriptBody(text)
+    text = APP.stripUtf8Bom(tostring(text or ""))
+    if #text < 256 then
+        return false, "файл обновления слишком маленький"
+    end
+    if not text:find("script_name%s*%(") then
+        return false, "в скачанном файле нет script_name"
+    end
+    if not text:find("script_version%s*%(") then
+        return false, "в скачанном файле нет script_version"
+    end
+    return true, nil
+end
+
+function APP.asyncUpdaterHttpGet(url, resolve, reject)
+    resolve = type(resolve) == "function" and resolve or function() end
+    reject = type(reject) == "function" and reject or function() end
+    url = tostring(url or "")
+
+    if url == "" then
+        reject("пустой URL")
+        return
+    end
+    if type(effil) ~= "table" or type(effil.thread) ~= "function" then
+        reject("effil unavailable")
+        return
+    end
+
+    local okThread, requestThread = pcall(function()
+        return effil.thread(function(urlArg)
+            local https = require("ssl.https")
+            local ltn12 = require("ltn12")
+            local responseBody = {}
+
+            https.TIMEOUT = 15
+
+            local ok, code, responseHeaders, statusLine = https.request({
+                url = urlArg,
+                method = "GET",
+                protocol = "tlsv1_2",
+                options = { "all", "no_sslv2", "no_sslv3", "no_tlsv1", "no_tlsv1_1" },
+                verify = "none",
+                sink = ltn12.sink.table(responseBody),
+                redirect = false
+            })
+
+            local body = table.concat(responseBody)
+            if ok and tonumber(code) then
+                return true, tonumber(code) or 0, body, tostring(statusLine or "")
+            end
+
+            return false, tonumber(code) or 0, body, tostring(statusLine or ""), tostring(code or "https request failed")
+        end)(url)
+    end)
+
+    if not okThread or requestThread == nil then
+        reject(tostring(requestThread or "не удалось создать поток обновления"))
+        return
+    end
+
+    local managedThreadId = registerManagedThread(requestThread)
+    lua_thread.create(function()
+        while true do
+            if DATA.scriptTerminating or THREADS.shuttingDown then
+                pcall(function()
+                    requestThread:cancel()
+                end)
+                unregisterManagedThread(managedThreadId)
+                return
+            end
+
+            local okStatus, status = pcall(function()
+                return requestThread:status()
+            end)
+            if not okStatus then
+                unregisterManagedThread(managedThreadId)
+                reject(tostring(status or "ошибка статуса потока обновления"))
+                return
+            end
+
+            if status == "completed" then
+                local okGet, ok, statusCode, body, statusLine, errText = pcall(function()
+                    return requestThread:get()
+                end)
+                unregisterManagedThread(managedThreadId)
+                if not okGet then
+                    reject(tostring(ok or "ошибка получения ответа обновления"))
+                    return
+                end
+                if ok then
+                    resolve(statusCode, body, statusLine)
+                else
+                    reject(tostring(errText or statusLine or ("HTTP " .. tostring(statusCode))))
+                end
+                return
+            elseif status == "canceled" then
+                unregisterManagedThread(managedThreadId)
+                reject("canceled")
+                return
+            end
+
+            wait(0)
+        end
+    end)
+end
+
+function APP.finishUpdateCheck(versionData, manualMode)
+    local updater = DATA.updater
+    updater.checking = false
+    updater.lastCheckedAt = os.clock()
+
+    local remoteVersion = trim(versionData.version or "")
+    local remoteScriptUrl = trim(versionData.script_url or "")
+    local changelog = trim(versionData.changelog or "")
+
+    updater.latestVersion = remoteVersion
+    updater.latestScriptUrl = remoteScriptUrl
+    updater.changelog = changelog
+    updater.lastError = ""
+
+    local compareResult = APP.compareVersions(remoteVersion, CONST.SCRIPT_VERSION)
+    updater.updateAvailable = compareResult > 0
+
+    if compareResult > 0 then
+        local message = string.format(
+            "Доступно обновление: %s -> %s. Команда: /%s",
+            CONST.SCRIPT_VERSION,
+            remoteVersion,
+            CONST.UPDATER_COMMAND
+        )
+        chatInfo(message)
+        if changelog ~= "" then
+            chatInfo("Что нового: " .. changelog)
+        end
+        if manualMode == "download_if_new" then
+            APP.downloadLatestUpdate()
+        end
+    else
+        updater.updateAvailable = false
+        if manualMode == "download_if_new" then
+            chatSuccess("У вас уже актуальная версия: " .. CONST.SCRIPT_VERSION)
+        else
+            chatSuccess("Используется актуальная версия: " .. CONST.SCRIPT_VERSION)
+        end
+    end
+end
+
+function APP.failUpdateCheck(errorText)
+    local updater = DATA.updater
+    updater.checking = false
+    updater.lastCheckedAt = os.clock()
+    updater.lastError = tostring(errorText or "неизвестная ошибка")
+    if updater.downloading then
+        updater.downloading = false
+    end
+    chatError("Не удалось проверить обновление: " .. updater.lastError)
+end
+
+function APP.checkForUpdates(manualMode)
+    local updater = DATA.updater
+    if updater.checking then
+        chatInfo("Проверка обновления уже выполняется.")
+        return
+    end
+    if updater.downloading then
+        chatInfo("Сейчас уже идёт скачивание обновления.")
+        return
+    end
+
+    updater.checking = true
+    updater.lastError = ""
+
+    APP.asyncUpdaterHttpGet(
+        CONST.UPDATER_VERSION_URL,
+        function(statusCode, body)
+            if tonumber(statusCode) ~= 200 then
+                APP.failUpdateCheck("HTTP " .. tostring(statusCode) .. " при загрузке version.json")
+                return
+            end
+
+            local versionData, parseError = APP.parseUpdaterVersionJson(body)
+            if not versionData then
+                APP.failUpdateCheck(parseError or "битый version.json")
+                return
+            end
+
+            if versionData.version_url ~= "" and trim(versionData.version_url) ~= trim(CONST.UPDATER_VERSION_URL) then
+                APP.failUpdateCheck("version.json ссылается на другой version.json")
+                return
+            end
+
+            APP.finishUpdateCheck(versionData, manualMode)
+        end,
+        function(errText)
+            APP.failUpdateCheck(errText)
+        end
+    )
+end
+
+function APP.downloadLatestUpdate()
+    local updater = DATA.updater
+    if updater.downloading then
+        chatInfo("Скачивание обновления уже выполняется.")
+        return
+    end
+
+    local scriptUrl = trim(updater.latestScriptUrl or "")
+    local latestVersion = trim(updater.latestVersion or "")
+    if scriptUrl == "" or latestVersion == "" then
+        chatError("Нет данных об обновлении. Сначала дождитесь успешной проверки.")
+        return
+    end
+
+    updater.downloading = true
+    APP.asyncUpdaterHttpGet(
+        scriptUrl,
+        function(statusCode, body)
+            updater.downloading = false
+
+            if tonumber(statusCode) ~= 200 then
+                chatError("Не удалось скачать обновление: HTTP " .. tostring(statusCode))
+                return
+            end
+
+            body = APP.stripUtf8Bom(tostring(body or ""))
+            local okBody, validationError = APP.isValidUpdaterScriptBody(body)
+            if not okBody then
+                chatError("Скачанный файл отклонён: " .. tostring(validationError or "невалидный Lua"))
+                return
+            end
+
+            local downloadedVersion = APP.parseVersionFromLuaScript(body)
+            if downloadedVersion == "" then
+                chatError("В скачанном файле не удалось определить script_version.")
+                return
+            end
+            if APP.compareVersions(downloadedVersion, latestVersion) ~= 0 then
+                chatError("version.json и .lua рассинхронизированы: json=" .. latestVersion .. ", lua=" .. downloadedVersion)
+                return
+            end
+
+            if not APP.writeAllText(PATHS.UPDATER_TEMP_FILE, body, true) then
+                chatError("Не удалось записать временный файл обновления.")
+                return
+            end
+
+            local tempBody = APP.readAllText(PATHS.UPDATER_TEMP_FILE, true)
+            if tempBody ~= body then
+                deleteFileSafe(PATHS.UPDATER_TEMP_FILE)
+                chatError("Проверка записанного обновления не прошла.")
+                return
+            end
+
+            local selfScriptPath = APP.getSelfScriptPath()
+            if not APP.writeAllText(selfScriptPath, body, true) then
+                deleteFileSafe(PATHS.UPDATER_TEMP_FILE)
+                chatError("Не удалось заменить текущий файл скрипта.")
+                return
+            end
+
+            deleteFileSafe(PATHS.UPDATER_TEMP_FILE)
+            chatSuccess("Обновление скачано: " .. downloadedVersion)
+            chatInfo("Перезагрузите скрипт или игру, чтобы применить обновление.")
+        end,
+        function(errText)
+            updater.downloading = false
+            chatError("Не удалось скачать обновление: " .. tostring(errText or "неизвестная ошибка"))
+        end
+    )
 end
 
 function APP.clampNumber(value, minValue, maxValue)
@@ -4453,6 +4871,7 @@ drawTabHelp = function()
     imgui.TextWrapped("/captdrop - удалить recovery текущего капта")
     imgui.TextWrapped("/captfinish [текст] - завершить восстановленный капт вручную")
     imgui.TextWrapped("/captstatus - показать текущий статус капта и recovery")
+    imgui.TextWrapped("/" .. CONST.UPDATER_COMMAND .. " - проверить и скачать обновление скрипта")
     imgui.TextWrapped("")
     imgui.TextWrapped("Файлы настроек лежат в moonloader\\ghetto_discord_assistant\\")
     imgui.TextWrapped("main.ini | fraglist.ini | punishments.ini | online.ini | bantachka.ini | priority.ini | follow.ini")
@@ -4886,6 +5305,9 @@ end
 local function registerCommands()
     sampRegisterChatCommand("getfrags", handleGetFragsCommand)
     sampRegisterChatCommand("captscan66", startDialog66WhiteScan)
+    sampRegisterChatCommand(CONST.UPDATER_COMMAND, function()
+        APP.checkForUpdates("download_if_new")
+    end)
     sampRegisterChatCommand("prioritydebug", function()
         APP.runPriorityDebug()
     end)
@@ -4918,6 +5340,7 @@ local function printStartBanner()
         .. COLORS.WHITE .. "| "
         .. COLORS.ACCENT .. "/lastcapt")
     chat(COLORS.WHITE .. " Recovery: " .. COLORS.ACCENT .. "/captstatus /captdrop /captfinish")
+    chat(COLORS.WHITE .. " Обновление: " .. COLORS.ACCENT .. "/" .. CONST.UPDATER_COMMAND)
     chat(COLORS.WHITE .. " Папка: " .. COLORS.ACCENT .. "moonloader\\ghetto_discord_assistant\\")
     chat(COLORS.LINE .. CONST.LINE_TEXT)
 end
@@ -4941,6 +5364,7 @@ function main()
     registerCommands()
     printStartBanner()
     loadRecoveryArtifactsOnStart()
+    APP.checkForUpdates("check_only")
     APP.syncCustomNametagsState(true)
     APP.syncSkeletalState(true)
 
